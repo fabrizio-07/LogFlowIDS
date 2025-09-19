@@ -1,0 +1,9 @@
+services:
+  fluentd:
+    image: fluent/fluentd:v1.16-1
+    container_name: fluentd
+    volumes:
+      - ./fluentd/config/fluentd.conf:/fluentd/etc/fluent.conf:ro
+      - /var/log/system.log:/fluentd/log/system.log:ro
+      - ./fluentd/pos:/fluentd/pos
+    command: ["fluentd", "-c", "/fluentd/etc/fluent.conf", "-v"]
