@@ -1,0 +1,14 @@
+# All the log files
+*.log
+
+# Fluentd pos files
+*.pos
+/fluentd/pos/
+
+# Docker runtime, seed, and environment files
+*.pid
+*.seed
+.env
+
+# MacOS junk
+.DS_Store
