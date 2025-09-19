@@ -1,6 +1,6 @@
 services:
   fluentd:
-    image: fluent/fluentd:v1.16-1
+    image: fluent/fluentd
     container_name: fluentd
     volumes:
       - ./fluentd/config/fluentd.conf:/fluentd/etc/fluent.conf:ro
