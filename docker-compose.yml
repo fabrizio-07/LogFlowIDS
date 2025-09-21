@@ -1,9 +1,32 @@
 services:
+
   fluentd:
-    image: fluent/fluentd
+    build: ./fluentd
     container_name: fluentd
     volumes:
       - ./fluentd/config/fluentd.conf:/fluentd/etc/fluent.conf:ro
       - /var/log/system.log:/fluentd/log/system.log:ro
       - ./fluentd/pos:/fluentd/pos
     command: ["fluentd", "-c", "/fluentd/etc/fluent.conf", "-v"]
+    depends_on:
+      - kafka
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
