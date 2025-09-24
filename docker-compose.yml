@@ -30,3 +30,16 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     depends_on:
       - zookeeper
+
+  spark:
+    build: ./spark
+    container_name: spark
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "8080:8080" #spark web ui
+      - "7077:7077"  
+    depends_on:
+      - kafka
+    volumes:
+      - ./spark/src:/opt/spark-app
