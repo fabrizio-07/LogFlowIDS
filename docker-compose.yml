@@ -5,9 +5,10 @@ services:
     container_name: fluentd
     volumes:
       - ./fluentd/config/fluentd.conf:/fluentd/etc/fluent.conf:ro
-      - /var/log/system.log:/fluentd/log/system.log:ro
       - ./fluentd/pos:/fluentd/pos
     command: ["fluentd", "-c", "/fluentd/etc/fluent.conf", "-v"]
+    ports:
+      - "42069:42069"
     depends_on:
       - kafka
 
@@ -25,9 +26,14 @@ services:
       - "9092:9092"
     environment:
       KAFKA_BROKER_ID: 1
+      KAFKA_CREATE_TOPICS: "macos_logs:1:1"
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_MESSAGE_MAX_BYTES: 200000000        
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 200000000
+      KAFKA_MAX_REQUEST_SIZE: 200000000
     depends_on:
       - zookeeper
 
@@ -36,8 +42,10 @@ services:
     container_name: spark
     environment:
       - SPARK_MODE=master
+    command: > 
+          spark-submit /opt/spark-app/process_logs.py
     ports:
-      - "8080:8080" #spark web ui
+      - "8081:8080" #spark web ui
       - "7077:7077"  
     depends_on:
       - kafka
