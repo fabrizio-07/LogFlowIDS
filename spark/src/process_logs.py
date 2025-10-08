@@ -1,37 +1,60 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, from_json
-from pyspark.sql.types import StructType, StringType
+from pyspark.sql.functions import from_json, col
+from pyspark.sql.types import StructType, StructField, StringType, LongType, DoubleType
 
-dataSchema = (
-    StructType()
-    .add("timestamp", StringType())
-    .add("host", StringType())
-    .add("process", StringType())
-    .add("message", StringType())
+spark = (
+    SparkSession.builder
+        .appName("LogFlowIDS")
+        .master("local[*]")
+        .getOrCreate()
 )
 
-spark = SparkSession.builder.appName("LogFlowIDS").getOrCreate()
+spark.sparkContext.setLogLevel("WARN")
 
-df = (
+log_schema = StructType([
+    StructField("traceID", StringType()),
+    StructField("eventMessage", StringType()),
+    StructField("eventType", StringType()),
+    StructField("subsystem", StringType()),
+    StructField("category", StringType()),
+    StructField("processImagePath", StringType()),
+    StructField("timestamp", StringType()),
+    StructField("processID", LongType()),
+    StructField("threadID", LongType()),
+    StructField("senderImagePath", StringType()),
+    StructField("messageType", StringType()),
+])
+
+raw_stream = (
     spark.readStream
-    .format("kafka")
-    .option("kafka.bootstrap.servers", "kafka:9092")
-    .option("subscribe", "system_logs")
-    .option("startingOffsets", "earliest")
-    .load()
+        .format("kafka")
+        .option("kafka.bootstrap.servers", "kafka:9092")
+        .option("subscribe", "macos_logs")
+        .option("startingOffsets", "latest")
+        .load()
 )
 
-logs = df.selectExpr("CAST(value AS STRING) as value")
+json_stream = raw_stream.selectExpr("CAST(value AS STRING) as json_str")
 
-parsed = logs.select(from_json(col("value"), dataSchema).alias("data")).select("data.*")
+parsed_stream = json_stream.select(from_json(col("json_str"), log_schema).alias("data")).select("data.*")
+
+logs_selected = parsed_stream.select(
+    "timestamp",
+    "subsystem",
+    "category",
+    "eventType",
+    "eventMessage",
+    "processImagePath",
+    "processID",
+    "threadID"
+)
 
 query = (
-    parsed.writeStream
-    .outputMode("append")
-    .format("console")
-    .option("truncate", False)
-    .option("checkpointLocation", "/tmp/spark-checkpoints/logflowids")
-    .start()
+    logs_selected.writeStream
+        .outputMode("append")
+        .format("console")
+        .option("truncate", "false")
+        .start()
 )
 
 query.awaitTermination()
