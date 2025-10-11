@@ -56,7 +56,6 @@ services:
     command: > 
           spark-submit /opt/spark-app/process_logs.py
     ports:
-      - "8081:8080" #spark web ui
       - "7077:7077"  
     depends_on:
       - kafka
