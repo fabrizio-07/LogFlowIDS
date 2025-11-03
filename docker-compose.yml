@@ -53,8 +53,7 @@ services:
     container_name: spark
     environment:
       - SPARK_MODE=master
-    command: > 
-          spark-submit /opt/spark-app/process_logs.py
+    command: ["/opt/spark/bin/spark-submit", "/opt/spark-app/process_logs.py"]
     ports:
       - "7077:7077"  
     depends_on:
