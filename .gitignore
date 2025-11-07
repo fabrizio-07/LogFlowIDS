@@ -1,13 +1,25 @@
-# All the log files
-*.log
+# Python
+__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
 
-# Fluentd pos files
+# Pipenv
+/ml_training/.venv/
+
+# Large training data file
+/data/*
+
+# All log files
+**/*.log
+
+# Fluentd pos files (runtime state)
 *.pos
 /fluentd/pos/
 
 # Docker runtime, seed, and environment files
-*.pid
-*.seed
+**/*.pid
+**/*.seed
 .env
 
 # MacOS junk
