@@ -1,7 +1,8 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, regexp_extract, when, lit, coalesce, expr
-from pyspark.sql.types import StructType, StructField, StringType, LongType, DoubleType
+from pyspark.sql.functions import from_json, col, regexp_extract, when, lit, coalesce, expr, concat_ws, udf
+from pyspark.sql.types import StructType, StructField, StringType, LongType, DoubleType, IntegerType
 import re
+import joblib
 
 spark = (
     SparkSession.builder
@@ -11,6 +12,37 @@ spark = (
 )
 
 spark.sparkContext.setLogLevel("WARN")
+
+print("Loading ML models...")
+MODEL_PATH = "/opt/spark-models/"
+try:
+    vectorizer = joblib.load(MODEL_PATH + "tfidf_model.joblib")
+    model = joblib.load(MODEL_PATH + "isolation_forest_model.joblib")
+    print("ML models loaded successfully.")
+except Exception as e:
+    print(f"ERROR: Could not load ML models from {MODEL_PATH}. {e}")
+    vectorizer = None
+    model = None
+
+def predict_anomaly(text):
+
+    if not vectorizer or not model:
+        return 0
+        
+    try:
+        if not text:
+            return 0
+        
+        text_vector = vectorizer.transform([text])
+        prediction = model.predict(text_vector)
+        
+        is_suspicious = 1 if prediction[0] == -1 else 0
+        return is_suspicious
+    except Exception as e:
+        print(f"Error during ML prediction: {e}")
+        return 0
+
+predict_udf = udf(predict_anomaly, IntegerType())
 
 log_schema = StructType([
     StructField("traceID", StringType()),
@@ -31,7 +63,7 @@ raw_stream = (
         .format("kafka")
         .option("kafka.bootstrap.servers", "kafka:9092")
         .option("subscribe", "macos_logs")
-        .option("startingOffsets", "latest")
+        .option("startingOffsets", "earliest")
         .load()
 )
 
@@ -40,6 +72,7 @@ json_stream = raw_stream.selectExpr("CAST(value AS STRING) as json_str")
 parsed_stream = json_stream.select(from_json(col("json_str"), log_schema).alias("data")).select("data.*")
 
 logs_selected = parsed_stream.select(
+    "traceID",
     "timestamp",
     "subsystem",
     "category",
@@ -74,40 +107,38 @@ suspicious_keywords = [
 escaped = [re.escape(k) for k in suspicious_keywords]
 pattern = r"(?i)\b(" + "|".join(escaped) + r")\b"
 
-logs_safe = (
-    logs_selected
-    .withColumn("eventMessage_safe", coalesce(col("eventMessage"), lit("")))
-    .withColumn("processImagePath_safe", coalesce(col("processImagePath"), lit("")))
-    .withColumn("combined_text", col("eventMessage_safe") + lit(" ") + col("processImagePath_safe"))
+logs_with_text = logs_selected.withColumn(
+    "combined_text",
+    concat_ws(" ", col("eventMessage"), col("processImagePath"))
 )
 
-flagged = logs_safe.withColumn(
-    "matched_keyword", regexp_extract(col("combined_text"), pattern, 1)
+rule_flagged = logs_with_text.withColumn(
+    "rule_is_suspicious",
+    when(col("combined_text").rlike(pattern), lit(1)).otherwise(lit(0))
 )
 
-score_expr = " + ".join([
-    f"(CASE WHEN combined_text RLIKE '(?i)\\\\b{re.escape(k)}\\\\b' THEN 1 ELSE 0 END)"
-    for k in suspicious_keywords
-])
-flagged = flagged.withColumn("suspicion_score", expr(score_expr))
-
-flagged = flagged.withColumn(
+ml_flagged = rule_flagged.withColumn("ml_is_suspicious", predict_udf(col("combined_text")))
+final_flagged = ml_flagged.withColumn(
     "is_suspicious",
-    when(col("suspicion_score") > 0, lit(1)).otherwise(lit(0))
+    when(
+        (col("rule_is_suspicious") == 1) | (col("ml_is_suspicious") == 1),
+        lit(1)
+    ).otherwise(lit(0))
 )
 
-output_df = flagged.select(
-"timestamp",
-"subsystem",
-"category",
-"eventType",
-"eventMessage",
-"processImagePath",
-"processID",
-"threadID",
-"matched_keyword",
-"suspicion_score",
-"is_suspicious"
+output_df = final_flagged.select(
+    "traceID",
+    "timestamp",
+    "subsystem",
+    "category",
+    "eventType",
+    "eventMessage",
+    "processImagePath",
+    "processID",
+    "threadID",
+    "is_suspicious",        
+    "rule_is_suspicious",   
+    "ml_is_suspicious"      
 )
 
 query = (
