@@ -141,11 +141,29 @@ output_df = final_flagged.select(
     "ml_is_suspicious"      
 )
 
+def write_to_es(batch_df, batch_id):
+    if batch_df.rdd.isEmpty():
+        return
+    (batch_df
+    .write
+    .format("org.elasticsearch.spark.sql")
+    .option("es.nodes", "elasticsearch")      
+    .option("es.port", "9200")            
+    .option("es.nodes.wan.only", "false")  
+    .option("es.resource", "logs-enriched")  
+    .option("es.mapping.id", "traceID")
+    .option("es.batch.size.entries", "5000")
+    .option("es.batch.size.bytes", "10485760")
+    .option("es.write.operation", "upsert")
+    .mode("append")
+    .save()
+    )
+
+
 query = (
-    output_df.writeStream
+    output_df.writeStream 
         .outputMode("append")
-        .format("console")
-        .option("truncate", "false")
+        .foreachBatch(write_to_es)
         .option("checkpointLocation", "/tmp/spark-checkpoints/logflowids")
         .start()
 )
