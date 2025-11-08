@@ -4,9 +4,6 @@ __pycache__/
 **/*.pyo
 **/*.pyd
 
-# Pipenv
-/ml_training/.venv/
-
 # Large training data file
 /data/*
 
