@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, regexp_extract, when, lit, coalesce, expr, concat_ws, udf
+from pyspark.sql.functions import from_json, col, regexp_extract, when, lit, coalesce, expr, concat_ws, udf, to_timestamp, date_format
 from pyspark.sql.types import StructType, StructField, StringType, LongType, DoubleType, IntegerType
 import re
 import joblib
@@ -70,8 +70,16 @@ raw_stream = (
 json_stream = raw_stream.selectExpr("CAST(value AS STRING) as json_str")
 
 parsed_stream = json_stream.select(from_json(col("json_str"), log_schema).alias("data")).select("data.*")
+parsed_stream_with_date_obj = parsed_stream.withColumn(
+    "timestamp_obj", 
+    to_timestamp(col("timestamp"))
+)
+parsed_stream_with_date_str = parsed_stream_with_date_obj.withColumn(
+    "timestamp", 
+    date_format(col("timestamp_obj"), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+)
 
-logs_selected = parsed_stream.select(
+logs_selected = parsed_stream_with_date_str.select(
     "traceID",
     "timestamp",
     "subsystem",
