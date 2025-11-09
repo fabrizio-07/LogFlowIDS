@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, regexp_extract, when, lit, coalesce, expr, concat_ws, udf, to_timestamp, date_format
-from pyspark.sql.types import StructType, StructField, StringType, LongType, DoubleType, IntegerType
+from pyspark.sql.functions import from_json, col, when, lit, concat_ws, udf, to_timestamp, date_format
+from pyspark.sql.types import StructType, StructField, StringType, LongType, IntegerType
 import re
 import joblib
 
