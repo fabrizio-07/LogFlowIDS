@@ -1,8 +1,9 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, when, lit, concat_ws, udf, to_timestamp, date_format
+from pyspark.sql.functions import from_json, col, when, lit, concat_ws, to_timestamp, date_format, pandas_udf
 from pyspark.sql.types import StructType, StructField, StringType, LongType, IntegerType
 import re
 import joblib
+import pandas as pd
 
 spark = (
     SparkSession.builder
@@ -24,25 +25,24 @@ except Exception as e:
     vectorizer = None
     model = None
 
-def predict_anomaly(text):
+@pandas_udf(IntegerType())
+def predict_udf(texts: pd.Series) -> pd.Series:
 
     if not vectorizer or not model:
-        return 0
+        return pd.Series([0] * len(texts))
         
     try:
-        if not text:
-            return 0
-        
-        text_vector = vectorizer.transform([text])
-        prediction = model.predict(text_vector)
-        
-        is_suspicious = 1 if prediction[0] == -1 else 0
-        return is_suspicious
-    except Exception as e:
-        print(f"Error during ML prediction: {e}")
-        return 0
+        texts_filled = texts.fillna("")
 
-predict_udf = udf(predict_anomaly, IntegerType())
+        text_vectors = vectorizer.transform(texts_filled)
+        predictions = model.predict(text_vectors)
+
+        is_suspicious = [1 if p == -1 else 0 for p in predictions]
+        
+        return pd.Series(is_suspicious)
+    except Exception as e:
+        print(f"Error during ML batch prediction: {e}")
+        return pd.Series([0] * len(texts))
 
 log_schema = StructType([
     StructField("traceID", StringType()),
@@ -64,6 +64,7 @@ raw_stream = (
         .option("kafka.bootstrap.servers", "kafka:9092")
         .option("subscribe", "macos_logs")
         .option("startingOffsets", "earliest")
+        .option("maxOffsetsPerTrigger", 1000)
         .load()
 )
 

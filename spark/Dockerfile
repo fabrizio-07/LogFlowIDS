@@ -5,7 +5,7 @@ USER root
 RUN apt-get update && apt-get install -y curl ca-certificates python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --no-cache-dir scikit-learn joblib
+RUN pip3 install --no-cache-dir scikit-learn joblib pandas pyarrow
 
 RUN curl -L -o /opt/bitnami/spark/jars/spark-sql-kafka-0-10_2.12-3.5.1.jar \
       https://repo1.maven.org/maven2/org/apache/spark/spark-sql-kafka-0-10_2.12/3.5.1/spark-sql-kafka-0-10_2.12-3.5.1.jar && \
