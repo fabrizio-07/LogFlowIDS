@@ -2,6 +2,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col, when, lit, concat_ws, to_timestamp, date_format, pandas_udf
 from pyspark.sql.types import StructType, StructField, StringType, LongType, IntegerType
 import re
+import sys
 import joblib
 import pandas as pd
 
@@ -21,16 +22,13 @@ try:
     model = joblib.load(MODEL_PATH + "isolation_forest_model.joblib")
     print("ML models loaded successfully.")
 except Exception as e:
-    print(f"ERROR: Could not load ML models from {MODEL_PATH}. {e}")
-    vectorizer = None
-    model = None
+    print(f"FATAL ERROR: Could not load ML models from {MODEL_PATH}. {e}")
+    print("This is a critical failure. The pipeline cannot run. Exiting.")
+    sys.exit(1)
 
 @pandas_udf(IntegerType())
 def predict_udf(texts: pd.Series) -> pd.Series:
 
-    if not vectorizer or not model:
-        return pd.Series([0] * len(texts))
-        
     try:
         texts_filled = texts.fillna("")
 
@@ -40,9 +38,10 @@ def predict_udf(texts: pd.Series) -> pd.Series:
         is_suspicious = [1 if p == -1 else 0 for p in predictions]
         
         return pd.Series(is_suspicious)
+    
     except Exception as e:
-        print(f"Error during ML batch prediction: {e}")
-        return pd.Series([0] * len(texts))
+        print(f"FATAL ERROR during ML batch prediction: {e}")
+        raise e
 
 log_schema = StructType([
     StructField("traceID", StringType()),
