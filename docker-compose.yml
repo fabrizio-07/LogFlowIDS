@@ -36,6 +36,12 @@ services:
       KAFKA_MAX_REQUEST_SIZE: 200000000
     depends_on:
       - zookeeper
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server kafka:9092 --list | grep -q 'macos_logs'"]
+      interval: 5s 
+      timeout: 5s
+      retries: 20 
+      start_period: 15s
 
   spark:
     build: ./spark
@@ -44,8 +50,10 @@ services:
     ports:
       - "7077:7077"
     depends_on:
-      - kafka
-      - elasticsearch
+      kafka:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
     volumes:
       - ./spark/src:/opt/spark-app
       - ./spark/models:/opt/spark-models
