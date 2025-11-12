@@ -8,7 +8,7 @@ __pycache__/
 /data/*
 
 # Malicious logs sample to demonstrate that pipeline does its work
-**/malicious_logs_sample.jsonl
+/demo/*
 
 # All log files
 **/*.log
