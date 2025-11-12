@@ -59,7 +59,7 @@ print("Training Isolation Forest model...")
 
 model = IsolationForest(
     n_estimators=100,    
-    contamination='auto',  
+    contamination=0.05,  
     random_state=42,     
     n_jobs=-1           
 )
