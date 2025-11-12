@@ -1,7 +1,6 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col, when, lit, concat_ws, to_timestamp, date_format, pandas_udf
 from pyspark.sql.types import StructType, StructField, StringType, LongType, IntegerType
-import re
 import sys
 import joblib
 import pandas as pd
@@ -91,38 +90,64 @@ logs_selected = parsed_stream_with_date_str.select(
     "threadID"
 )
 
-suspicious_keywords = [
-# privilege / system control
-"sudo", "launchctl", "launchd", "csrutil", "spctl", "codesign",
-# kernel / kext / injection
-"kextload", "DYLD_INSERT_LIBRARIES", "task_for_pid",
-# persistence / scheduling
-"cron", "launchagents", "launchdaemons", 
-# remote / network / transfer
-"curl", "wget", "nc", "netcat", "ssh", "scp", "rsync", "ftp", "tftp",
-# scripting / one-liners often used by attackers
-"python -c", "ruby -e", "perl -e", "base64 -d", "bash -c", "zsh -c", 
-# obfuscation / installer / package managers
-"brew install", "installer", "open -a",
-# destructive / commands used by attackers
-"rm -rf", "chmod +x", "chown", "dd",
-# macOS specific APIs / automation
-"osascript", "screen sharing", 
-# generic malware keywords
-"malware", "suspicious", "reverse shell", "unauthorized", "attack", "exploit"
-]
-
-escaped = [re.escape(k) for k in suspicious_keywords]
-pattern = r"(?i)\b(" + "|".join(escaped) + r")\b"
-
 logs_with_text = logs_selected.withColumn(
     "combined_text",
     concat_ws(" ", col("eventMessage"), col("processImagePath"))
 )
 
-rule_flagged = logs_with_text.withColumn(
+rule_annotated = logs_with_text.withColumn(
+    "rule_name",
+    when(
+        (
+            col("processImagePath").rlike(r"/(bin|sbin)/launchctl$") & 
+            col("eventMessage").rlike(r"\b(load|enable)\b")
+        ), 
+        lit("Rule 1: LaunchAgent/Daemon loading")
+    ).when(
+        col("processImagePath").rlike(r"/usr/bin/crontab$"), 
+        lit("Rule 2: Crontab modification")
+    ).when(
+        col("eventMessage").contains("DYLD_INSERT_LIBRARIES"), 
+        lit("Rule 3: Process injection")
+    ).when(
+        (
+            col("processImagePath").rlike(r"/usr/sbin/spctl$") & 
+            col("eventMessage").contains("--master-disable")
+        ), 
+        lit("Rule 4: Gatekeeper disabled")
+    ).when(
+        (
+            col("processImagePath").rlike(r"/usr/bin/xattr$") & 
+            col("eventMessage").rlike(r"(-d|-c).*com\.apple\.quarantine")
+        ), 
+        lit("Rule 5: Quarantine attribute cleared")
+    ).when(
+        (
+            col("processImagePath").rlike(r"/usr/bin/log$") & 
+            col("eventMessage").rlike(r"\b(erase|config)\b")
+        ), 
+        lit("Rule 6: Log clearing/tampering")
+    ).when(
+        col("processImagePath").rlike(r"/usr/bin/osascript$"), 
+        lit("Rule 7: AppleScript execution")
+    ).when(
+        (
+            col("processImagePath").rlike(r"/(sh|bash|zsh)$") & 
+            col("eventMessage").rlike(r"base64.*(-d|-D|--decode)|(python|ruby|perl) -c")
+        ), 
+        lit("Rule 8: Obfuscated shell command")
+    ).when(
+        col("processImagePath").rlike(r"/usr/bin/(nc|netcat)$"), 
+        lit("Rule 9: Netcat usage")
+    ).when(
+        col("processImagePath").rlike(r"/usr/sbin/system_profiler$"), 
+        lit("Rule 10: System profiling")
+    ).otherwise(lit("N/A"))
+)
+
+rule_flagged = rule_annotated.withColumn(
     "rule_is_suspicious",
-    when(col("combined_text").rlike(pattern), lit(1)).otherwise(lit(0))
+    when(col("rule_name") != "N/A", lit(1)).otherwise(lit(0))
 )
 
 ml_flagged = rule_flagged.withColumn("ml_is_suspicious", predict_udf(col("combined_text")))
@@ -146,7 +171,8 @@ output_df = final_flagged.select(
     "threadID",
     "is_suspicious",        
     "rule_is_suspicious",   
-    "ml_is_suspicious"      
+    "ml_is_suspicious",
+    "rule_name" 
 )
 
 def write_to_es(batch_df, batch_id):
@@ -166,7 +192,6 @@ def write_to_es(batch_df, batch_id):
     .mode("append")
     .save()
     )
-
 
 query = (
     output_df.writeStream 
