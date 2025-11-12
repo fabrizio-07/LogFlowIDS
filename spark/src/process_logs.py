@@ -1,9 +1,9 @@
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, when, lit, concat_ws, to_timestamp, date_format, pandas_udf
-from pyspark.sql.types import StructType, StructField, StringType, LongType, IntegerType
+from pyspark.sql import SparkSession # pyright: ignore[reportMissingImports]
+from pyspark.sql.functions import from_json, col, when, lit, concat_ws, to_timestamp, date_format, pandas_udf # pyright: ignore[reportMissingImports]
+from pyspark.sql.types import StructType, StructField, StringType, LongType, IntegerType # pyright: ignore[reportMissingImports]
 import sys
-import joblib
-import pandas as pd
+import joblib # pyright: ignore[reportMissingImports]
+import pandas as pd # pyright: ignore[reportMissingModuleSource]
 
 spark = (
     SparkSession.builder
