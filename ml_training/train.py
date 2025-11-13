@@ -1,7 +1,7 @@
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.ensemble import IsolationForest
-import joblib
+import pandas as pd # pyright: ignore[reportMissingModuleSource]
+from sklearn.feature_extraction.text import TfidfVectorizer # pyright: ignore[reportMissingModuleSource]
+from sklearn.ensemble import IsolationForest # pyright: ignore[reportMissingModuleSource]
+import joblib # pyright: ignore[reportMissingImports]
 from pathlib import Path
 
 print("Starting model training script...")
